@@ -1,0 +1,8 @@
+# pickle files can be generated upon running main
+*.p
+
+# csv files are too large to transfer through git and should be downloaded from tatoeba
+*.csv
+
+# ignore pycharm IDE files
+.idea/
