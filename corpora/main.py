@@ -1,4 +1,5 @@
-# used with file manipulation
+import datetime
+import decimal
 import os
 
 # stores/retrieves objects as files, convenient so we won't have to re-make objects from csv files every time
@@ -19,6 +20,9 @@ original_files = {'links': base_path + 'links.csv',
 # language codes for languages we would probably want to work in, ie english, russian, japanese etc
 language_codes = ['eng', 'rus', 'ita', 'tur', 'fra', 'por', 'spa', 'hun', 'jpn', 'fin', 'cmn',
                   'ell', 'vie', 'isl', 'kor', 'deu']
+restricted_codes = ['cmn', 'jpn', 'kor']
+
+user_codes = ['dot', 'shubby']
 
 
 # clears all pickle (.p) files (for wanting re-generation)
@@ -59,6 +63,53 @@ def create_bases():
     return base_links
 
 
+def create_tuple_frequencies():
+    for language in language_codes:
+        if language not in restricted_codes:
+            print('create tuple frequencies for ' + language)
+            sentence_links = {}
+            while not sentence_links:
+                try:
+                    with open(base_path + language + '.p', 'rb') as f:
+                        sentence_links = pickle.load(f)
+                        print(language + " sentence pickle successfully loaded")
+                except IOError:
+                    print(language + ' sentence pickle failed to load... all sentence pickles being created')
+                    create_sentences()
+
+                try:
+                    with open(base_path + language + '_freq.p', 'rb') as f:
+                        # frequency_l = pickle.load(f)
+                        print(language + " frequency pickle successfully loaded")
+                except IOError:
+                    print(language + ' frequency pickle failed to load...  being created')
+
+                    frequency_count = {}
+                    tuple_count = 0
+                    sentence_count = 0
+                    counter = 0
+                    length = len(sentence_links)
+
+                    for sentence in sentence_links.values():
+                        counter += 1
+                        if counter % 100_000 == 0:
+                            print(str(counter) + "/" + str(length))
+                        split = sentence.lower().split(' ')
+                        # split[0] = remove_punctuation(split[0])
+                        for start in range(len(split)):
+                            for end in range(start + 1, len(split) + 1):
+                                constructed_key = ' '.join(split[start:end])
+                                frequency_count.setdefault(constructed_key, 0)
+                                frequency_count[constructed_key] = frequency_count[constructed_key] + 1
+                                tuple_count += 1
+                        sentence_count += 1
+                    assert len(frequency_count) > 0, language + ' frequency count length is 0'
+                    frequency_count = [frequency_count, tuple_count]
+                    assert tuple_count > 0, 'tuple count is 0'
+                    print('dumping frequency pickle for ' + language)
+                    pickle.dump(frequency_count, open(base_path + language + '_freq.p', 'wb'))
+
+
 # links has ~9 million keys
 def create_links():
     sentence_links = {}
@@ -70,7 +121,6 @@ def create_links():
         print('links pickle failed to load... being created')
         with open(original_files['links'], 'r', encoding='utf-8') as f:
             for line in f.readlines():
-
                 # this file contains sentence_id to sentence_id links which represent translations
                 # one id may map to multiple translations, thus each key maps to a list of keys
                 a, b = line.split('\t')
@@ -127,55 +177,69 @@ def get_sentences_pickle(language):
     return language_d
 
 
+def get_frequency_pickle(lang):
+    assert lang in language_codes, 'wrong language code given'
+    assert lang not in restricted_codes, 'restricted code given'
+
+    frequency_l = None
+
+    try:
+        with open(base_path + lang + '_freq.p', 'rb') as f:
+            frequency_l = pickle.load(f)
+    except IOError:
+        assert True, 'no such frequency pickle exists for type ' + lang
+
+    return frequency_l
+
+
 # isolated code for playing with programgit
 def sandbox():
-    spa_d = get_sentences_pickle('spa')
     eng_d = get_sentences_pickle('eng')
+    eng_f = get_frequency_pickle('eng')
+    spa_d = get_sentences_pickle('spa')
+    rus_d = get_sentences_pickle('rus')
+    deu_d = get_sentences_pickle('deu')
+    jpn_d = get_sentences_pickle('jpn')
+    isl_d = get_sentences_pickle('isl')
+    links = create_links()
 
-    english_word_count = {}
-    spanish_word_count = {}
+    listy = [(k, v) for k, v in eng_f[0].items()]
+    listy.sort(key=lambda x: x[1], reverse=False)
+    # counter = 1
+    # for i, e in enumerate(listy):
+    #     if i % counter == 0 and e[1] > 1:
+    #         print(i, e)
+    #         counter *= 2
 
-    for v in eng_d.values():
-        for wordThing in v.split(' '):
-            english_word_count.setdefault(wordThing.strip().lower(), 0)
-            english_word_count[wordThing.strip().lower()] = english_word_count[wordThing.strip().lower()] + 1;
+    for k, sentence in eng_d.items():
+        constructed = []
+        for one_tuple in sentence.lower().split(' '):
+            # print(one_tuple)
+            # print(len(eng_f[0]))
+            # print(type(eng_f[0]))
+            # print(eng_f[0][one_tuple])
+            constructed.append((one_tuple, eng_f[0][one_tuple]))
+        constructed.sort(key=lambda x: x[1])
+        print('======')
+        # print(sentence)
+        # print(constructed)
+        # print(constructed[0][0])
+        print(sentence.lower().replace(constructed[0][0], 'xxxxx', 1))
 
-    for v in spa_d.values():
-        for wordThing in v.split(' '):
-            spanish_word_count.setdefault(wordThing.strip().lower(), 0)
-            spanish_word_count[wordThing.strip().lower()] = spanish_word_count[wordThing.strip().lower()] + 1;
+        for translation_key in links[k]:
+            if translation_key in eng_d:
+                print(eng_d[translation_key])
+            if translation_key in spa_d:
+                print(spa_d[translation_key])
+            if translation_key in deu_d:
+                print(deu_d[translation_key])
+            if translation_key in isl_d:
+                print(isl_d[translation_key])
+            if translation_key in rus_d:
+                print(rus_d[translation_key])
+            if translation_key in jpn_d:
+                print(jpn_d[translation_key])
 
-    listy = [(k, v) for k, v in spanish_word_count.items()]
-    listy.sort(key=lambda x: x[1], reverse=True)
-    for e in listy:
-        if e[1] > 1000:
-            print(e)
-
-    # por_d = get_pickle('por')
-    # deu_d = get_pickle('deu')
-    #
-    # for k, v in eng_d.items():
-    #         print(k, v)
-    #         if k in links:
-    #             # print(links[k])
-    #             for e in links[k]:
-    #                 # if e in eng_d and e != k:
-    #                 #     print(k, v)
-    #                 #     print(eng_d[e])
-    #                 # if e in spa_d:
-    #                 #     print(spa_d[e])
-    #                 if e in fra_d:
-    #                     print(fra_d[e])
-    #                 # if e in spa_d:
-    #                 #     print(spa_d[e])
-    #                 # if e in fra_d:
-    #                 #     print(fra_d[e])
-    #                 # if e in por_d:
-    #                 #     print(por_d[e])
-    #                 # if e in deu_d:
-    #                 #     print(deu_d[e])
-    #         else:
-    #             print('this key is not in links')
 
 
 def main():
@@ -185,6 +249,7 @@ def main():
     bases = create_bases()
     links = create_links()
     create_sentences()
+    create_tuple_frequencies()
 
     sandbox()
 
